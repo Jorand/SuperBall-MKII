@@ -1,11 +1,24 @@
 #include <PIDController.h>
 
-const int encoderA = 3;
-const int encoderB = 17;
+#define MOTOR_1
 
-const int enA = 5;
-const int in1 = 4;
-const int in2 = 7;
+#ifdef MOTOR_1
+  // MOTOR 1 RIGHT
+  #define MOTOR_ENA 5
+  #define MOTOR_IN1 4
+  #define MOTOR_IN2 7
+  
+  #define ENCODER_A 3
+  #define ENCODER_B 17
+#else
+  // MOTOR 2 LEFT
+  #define MOTOR_ENA 6
+  #define MOTOR_IN1 15
+  #define MOTOR_IN2 8
+  
+  #define ENCODER_A 2
+  #define ENCODER_B 14
+#endif
 
 volatile long int encoder_pos = 0;
 PIDController pos_pid;
@@ -15,15 +28,17 @@ unsigned int integerValue=0;  // Max value is 65535
 char incomingByte;
 
 void setup() {
-
   Serial.begin(9600);
-  pinMode(encoderA, INPUT);
-  pinMode(encoderB, INPUT);
-  pinMode(enA, OUTPUT);
-  pinMode(in1, OUTPUT);
-  pinMode(in2, OUTPUT);
-  attachInterrupt(digitalPinToInterrupt(encoderA), encoder, RISING);
 
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A), encoder, RISING);
+
+  pinMode(MOTOR_ENA, OUTPUT);
+  pinMode(MOTOR_IN1, OUTPUT);
+  pinMode(MOTOR_IN2, OUTPUT);
+
+  pinMode(ENCODER_A, INPUT);
+  pinMode(ENCODER_B, INPUT);
+ 
   pos_pid.begin();
   pos_pid.tune(40, 2.5, 5000); // 15, 2.5, 3000
   pos_pid.limit(-255, 255);
@@ -44,11 +59,13 @@ void loop() {
   }
 
   motor_value = pos_pid.compute(encoder_pos);
+  
   if (motor_value > 0) {
     MotorCounterClockwise(motor_value);
   } else {
     MotorClockwise(abs(motor_value));
   }
+  
   Serial.println(encoder_pos);
   delay(10);
 }
@@ -56,7 +73,7 @@ void loop() {
 
 
 void encoder(){
-  if (digitalRead(encoderB) == HIGH) {
+  if (digitalRead(ENCODER_B) == HIGH) {
     encoder_pos++;
   } else {
     encoder_pos--;
@@ -65,24 +82,24 @@ void encoder(){
 
 void MotorClockwise(int power) {
   if (power > motor_min) {
-    analogWrite(enA, power);
-    digitalWrite(in1, HIGH);
-    digitalWrite(in2, LOW);
+    digitalWrite(MOTOR_IN1, HIGH);
+    digitalWrite(MOTOR_IN2, LOW);
+    analogWrite(MOTOR_ENA, power);
   } else {
-    digitalWrite(enA, LOW);
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, LOW);
+    //digitalWrite(MOTOR_ENA, LOW);
+    digitalWrite(MOTOR_IN1, LOW);
+    digitalWrite(MOTOR_IN2, LOW);
   }
 }
 
 void MotorCounterClockwise(int power) {
   if (power > motor_min) {
-    analogWrite(enA, power);
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, HIGH);
+    digitalWrite(MOTOR_IN1, LOW);
+    digitalWrite(MOTOR_IN2, HIGH);
+    analogWrite(MOTOR_ENA, power);
   } else {
-    digitalWrite(enA, LOW);
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, LOW);
+    //digitalWrite(MOTOR_ENA, LOW);
+    digitalWrite(MOTOR_IN1, LOW);
+    digitalWrite(MOTOR_IN2, LOW);
   }
 }
