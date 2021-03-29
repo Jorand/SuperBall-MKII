@@ -1,6 +1,6 @@
 #include <PIDController.h>
 
-#define MOTOR_1
+//#define MOTOR_1
 
 #ifdef MOTOR_1
   // MOTOR 1 RIGHT

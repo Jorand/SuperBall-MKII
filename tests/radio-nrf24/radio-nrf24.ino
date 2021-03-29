@@ -22,7 +22,7 @@ struct callback {
 } returnData;
 
 const uint64_t pipe = 0xE8E8F0F0E1AA;
-//byte addresse[6] = "1Node";
+//const byte addresses[0][6] = {"00001", "00002"};
 
 bool recievedData = false;
 

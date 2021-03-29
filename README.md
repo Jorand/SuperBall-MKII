@@ -1,9 +1,21 @@
 # :soccer::robot: SuperBall MKII
 A rolling sphere
 
-# Electronics
+# Electronics Remote
 (Arduino Uno/Diecimila/Duemilanove)
+```
+OLED SSD1306 128X32
+- GND -> GND
+- VCC -> 5v
+- SCL -> A5
+- SDA -> A4
+```
 
+
+
+# Electronics Robot
+(Arduino Uno/Diecimila/Duemilanove)
+```
 - Arduino NANO V3
 - nRF24 l01 PA LNA
 - BNO055
@@ -52,14 +64,18 @@ LEFT MOTOR
 * BNO055 SCL -> A5
 
 * BATT + -> 100K resistor -> A2 -> 10K resistor + (100nf cap) -> GND
+```
 
-## Test Tune PID
+## Test
 
+Tune PID motor encoder position
 No load:
+```
   | Ok   | Good
 P | 15   | 40
 I | 2.5  | 2.5
 D | 3000 | 5000
+```
 
 ## :thumbsup: Inspired by some nice project on the internet		
 [nRF24-Esk8-Remote by @SolidGeek](https://github.com/SolidGeek/nRF24-Esk8-Remote)

@@ -473,4 +473,3 @@ void drawBatteryLevel() {
     }
   }
 }
-
