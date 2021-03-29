@@ -1,6 +1,11 @@
 # :soccer::robot: SuperBall MKII
 A rolling sphere
 
+## Goal here
+Making the ball roll in every direction giving by the remote whatever the orientation of the robot inside and keeping his balance when doing so.
+
+For that i'm using an IMU (BNO055) and the two motors have encoded wheel. The remote use an 2.4GHz emitter (nRF24) to communicate.
+
 # Electronics Remote
 (Arduino Uno/Diecimila/Duemilanove)
 ```
@@ -10,8 +15,6 @@ OLED SSD1306 128X32
 - SCL -> A5
 - SDA -> A4
 ```
-
-
 
 # Electronics Robot
 (Arduino Uno/Diecimila/Duemilanove)
