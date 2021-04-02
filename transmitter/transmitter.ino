@@ -1,18 +1,18 @@
-/*
- Author Jorand - 2018
- Inspired by https://github.com/SolidGeek/nRF24-Esk8-Remote/
+/**************************************
+  Author Jorand - 2018
+  Inspired by https://github.com/SolidGeek/nRF24-Esk8-Remote/
 
- Arduino Nano
- ATmega328P
- 
-*/
+  ** Upload Settings **
+  Board: "Arduino Nano"
+  Processor: "ATmega328P (Old Bootloader)"
+**************************************/
 
 //#include <avr/pgmspace.h>
 #include <U8g2lib.h>
 #include <Wire.h>
 #include <SPI.h>
 #include "RF24.h"
- 
+
 //#define DEBUG
 
 #ifdef DEBUG
@@ -109,7 +109,7 @@ bool signalBlink = false;
 RF24 radio(9, 10);
 
 void setup() {
-  
+
   #ifdef DEBUG
     Serial.begin(9600);
     printf_begin();
@@ -144,13 +144,13 @@ void setup() {
 }
 
 void loop() {
-  
+
   readAnalogInputValues();
   readDigitalInputValues();
 
   //DEBUG_PRINT("INPUT: " + (String)analogInputValue[0] + "-" + (String)analogInputValue[1] + "-" + (String)digitalInputIsActive(digitalInputPin[0]) + "-" + (String)digitalInputStatus[1] + "-" + (String)digitalInputIsActive(digitalInputPin[2]) + "-" + (String)digitalInputIsActive(digitalInputPin[3]) + "-" + (String)digitalInputIsActive(digitalInputPin[4]));
   //DEBUG_PRINT("OUTPUT: " + (String)analogOutputValue[0] + "-" + (String)analogOutputValue[1]);
-  
+
   remPackage.ch1 = analogOutputValue[0];  // X
   remPackage.ch2 = analogOutputValue[1];  // Y
   remPackage.ch3 = digitalInputIsActive(digitalInputPin[1]); // 1 Up
@@ -231,7 +231,7 @@ bool digitalInputIsActive(uint8_t pin) {
 void readAnalogInputValues() {
   // Joystick reading can be noisy, lets make an average reading.
   unsigned short total[analogInputCount];
-  
+
   for ( uint8_t i = 0; i < analogInputCount; i++ ) {
     total[i] = 0;
     for ( uint8_t ii = 0; ii < 10; ii++ ) {
@@ -248,7 +248,7 @@ void readAnalogInputValues() {
 
     if (analogInputValue[i] >= inputCenter + inputCenterDeadzone) {
       analogOutputValue[i] = constrain(map(analogInputValue[i], inputCenter + inputCenterDeadzone, inputMax, 127, 255), 127, 255);
-    } 
+    }
     else if (analogInputValue[i] <= inputCenter - inputCenterDeadzone) {
       analogOutputValue[i] = constrain(map(analogInputValue[i], inputMin, inputCenter - inputCenterDeadzone, 0, 127), 0, 127);
     }
@@ -257,23 +257,23 @@ void readAnalogInputValues() {
       analogOutputValue[i] = 127;
     }
   }
-  
+
 }
 
 void readDigitalInputValues() {
 
   for ( uint8_t i = 0; i < digitalInputCount; i++ ) {
-    
+
     if (digitalInputIsActive(digitalInputPin[i])) {
-      
+
       if (millis() - lastDigitalInputPress[i] >= 250 ) {
         digitalInputStatus[i] = !digitalInputStatus[i];
         lastDigitalInputPress[i] = millis();
       }
-      
+
     }
   }
-  
+
 }
 
 // Function used to indicate the remotes battery level.
@@ -304,7 +304,7 @@ float batteryVoltage() {
 }
 
 void drawStartScreen() {
-  
+
   u8g2.firstPage();
   do {
 
@@ -312,7 +312,7 @@ void drawStartScreen() {
     u8g2.drawStr(20, 27, "Hello !");
 
   } while ( u8g2.nextPage() );
-  
+
   delay(1500);
 }
 
@@ -325,7 +325,7 @@ void drawTitleScreen(String title) {
 }
 
 void drawPage() {
-  
+
   float value;
   uint8_t decimals;
   String suffix;
@@ -386,9 +386,9 @@ void drawPage() {
 }
 
 void drawString(String text, uint8_t lenght, uint8_t x, uint8_t y, const uint8_t  *font){
-  
+
   static char textBuffer[20];
-  
+
   text.toCharArray(textBuffer, lenght);
 
   u8g2.setFont(font);
@@ -426,13 +426,13 @@ void drawThrottle() {
   }
 
   int battDisplay = (int)b;
-  
+
   drawString( (String)battDisplay +" %", 10, x, y + 7, u8g2_font_helvR08_tr);
 }
 
 void drawSignal() {
   // Position on OLED
-  uint8_t x = 114; 
+  uint8_t x = 114;
   uint8_t y = 17;
 
   if (connected == true) {
@@ -457,9 +457,9 @@ void drawSignal() {
 
 void drawBatteryLevel() {
   // Position on OLED
-  uint8_t x = 108; 
+  uint8_t x = 108;
   uint8_t y = 4;
-  
+
   int level = batteryLevel();
 
   u8g2.drawFrame(x + 2, y, 18, 9);

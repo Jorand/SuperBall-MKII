@@ -6,6 +6,48 @@ Making the ball roll in every direction giving by the remote whatever the orient
 
 For that i'm using an IMU (BNO055) and the two motors have encoded wheel. The remote use an 2.4GHz emitter (nRF24) to communicate.
 
+## Arduino IDE
+** Upload Settings **
+Board: "Arduino Nano"
+Processor: "ATmega328P (Old Bootloader)"
+
+### esp-link
+
+#### Flash with esptool
+Download the latest [release](https://github.com/jeelabs/esp-link/releases).
+
+```
+esptool.py --port /dev/tty.wchusbserial14130 --baud 230400 write_flash -fs 32m -ff 80m \
+    0x00000 boot_v1.7.bin 0x1000 user1.bin \
+    0x3FC000 esp_init_data_default.bin 0x3FE000 blank.bin
+```
+
+for more infos see [esp-link](https://github.com/jeelabs/esp-link)
+
+#### Connect to arduino
+- RX: connect to TX of microcontroller
+- TX: connect to RX of microcontroller
+- GND: connect to GND of microcontroller
+
+####
+Add this to your programmers.txt file:
+```
+esplink.name=esp-link 2032
+esplink.program.tool=avrdude
+esplink.protocol=arduino
+esplink.program.extra_params= -P net:192.168.1.59:2323  -b{upload.speed}
+
+esplink23.name=esp-link
+esplink23.program.tool=avrdude
+esplink23.protocol=arduino
+esplink23.program.extra_params= -P net:192.168.1.59:23  -b{upload.speed}
+```
+use ip of esp-link and just use upload with programmer `esp-link`.
+
+## Utils
+list port osx
+`ls /dev/tty*`
+
 # Electronics Remote
 (Arduino Uno/Diecimila/Duemilanove)
 ```

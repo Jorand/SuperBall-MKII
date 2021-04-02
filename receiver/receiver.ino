@@ -1,3 +1,11 @@
+/**************************************
+  Author Jorand Le Pape
+
+  ** Upload Settings **
+  Board: "Arduino Nano"
+  Processor: "ATmega328P"
+ **************************************/
+
 #include <SPI.h>
 #include <nRF24L01.h>
 #include "RF24.h"
@@ -75,7 +83,7 @@ unsigned long lastBatteryCheck;
 const uint8_t defaultInputCenter = 127;
 const short timeoutMax = 500;
 
-// Initiate RF24 class 
+// Initiate RF24 class
 RF24 radio(9, 10);
 
 // motors
@@ -111,7 +119,7 @@ char buzzerPin = 17;
 
 // BNO055
 #define RATE 20 // 1000/20 = 50 time per seconde
-#define BNO055_SAMPLERATE_DELAY_MS (RATE) 
+#define BNO055_SAMPLERATE_DELAY_MS (RATE)
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 unsigned long sensorLastMillis;
 
@@ -219,7 +227,7 @@ void loop() {
     // Read and store the received package
     radio.read( &remPackage, sizeof(remPackage) );
     //DEBUG_PRINT( uint64ToAddress(pipe) + " - New package: '" + (String)remPackage.type + "-" + (String)remPackage.ch1 + "-" + (String)remPackage.ch2 + "-" + (String)remPackage.ch3 + "-" + (String)remPackage.ch4 + "-" + (String)remPackage.ch5 + "-" + (String)remPackage.ch6 + "-" + (String)remPackage.ch7 + "'" );
-    
+
     if( remPackage.type <= 2 ){
       timeoutTimer = millis();
       recievedData = true;
@@ -246,23 +254,23 @@ void loop() {
         //joyX = map(rawJoyX, joyInputMin, joyInputMax, -255, 255);
 
         joyXLeft = map(remPackage.ch1, 127, 0, 0, 255);
-        joyXLeft = constrain(joyXLeft, 0, 255); 
+        joyXLeft = constrain(joyXLeft, 0, 255);
         if ( abs(joyXLeft) < inputCenterDeadzone ) { joyXLeft = 0; }
 
         joyXRight = map(remPackage.ch1, 127, 255, 0, 255);
-        joyXRight = constrain(joyXRight, 0, 255); 
+        joyXRight = constrain(joyXRight, 0, 255);
         if ( abs(joyXRight) < inputCenterDeadzone ) { joyXRight = 0; }
 
         //Serial.print("Remote: " + (String)remPackage.ch1 + " , " + (String)remPackage.ch2 + "-" + (String)remPackage.ch3 + "-" + (String)remPackage.ch4 + "-" + (String)remPackage.ch5 + "-" + (String)remPackage.ch6 + "-" + (String)remPackage.ch7 + "'" );
         //Serial.println("  ");
-        
+
         doActions();
 
         controlMode = remoteModeSetting;
 
         returnData.controlMode = controlMode;
-        
-        // The next time a transmission is received, the returnData will be sent back in acknowledgement 
+
+        // The next time a transmission is received, the returnData will be sent back in acknowledgement
         radio.writeAckPayload(1, &returnData, sizeof(returnData));
         break;
       case 1:
@@ -283,7 +291,7 @@ void loop() {
     resetMotor();
     controlMode = 0;
     timeoutTimer = millis();
-    
+
     DEBUG_PRINT( uint64ToAddress(pipe) + " - Timeout");
   }
   /* End timeout handling */
@@ -311,8 +319,8 @@ void loop() {
         resetMotor();
         break;
     }
-    
-    
+
+
     //updateMotor();
   }
 
@@ -320,17 +328,17 @@ void loop() {
 
 void updateSensor() {
 
-  /* Get a new sensor event */ 
-  sensors_event_t event; 
+  /* Get a new sensor event */
+  sensors_event_t event;
   bno.getEvent(&event);
 
   orientationX = event.orientation.x;
   orientationY = event.orientation.y;
   orientationZ = event.orientation.z;
-  
+
   /* Display the floating point data */
   //diplayData(event);
-  
+
   /* Optional: Display calibration status */
   //displayCalStatus();
 
@@ -340,7 +348,7 @@ void updateSensor() {
   /* New line for the next sample */
   //Serial.println("");
     //DEBUG_PRINT("");
-  
+
 }
 
 void diplayData(sensors_event_t event) {
@@ -377,7 +385,7 @@ void doActions()
   }
 
   else if (remPackage.ch4) {
-    
+
     //ghost busters
     tone(buzzerPin, 987, 133);   delay(133 * 1.30);
     tone(buzzerPin, 2489, 267); delay(267 * 1.30);
@@ -403,7 +411,7 @@ void doActions()
       if (remoteModeSetting > nbModes) {
         remoteModeSetting = 1;
       }
-    
+
       lastModeButtonPress = millis();
     }
   }
@@ -469,11 +477,11 @@ void motorControlPIDandHeading(){
 
   //Serial.print(" error: ");
   //Serial.print(error);
-  
+
   Setpoint2 = 0;
-  
+
   Input2 = error;
-  
+
   myPID2.Compute();
 
   //Serial.print(" Output2: ");
@@ -488,18 +496,18 @@ void motorControlPIDandHeading(){
 
   // Work out the required travel.
   diff_drive = target_pos_drive - current_pos_drive;
-  
+
   // Avoid any strange zero condition
   if( diff_drive != 0.00 ) {
     current_pos_drive += diff_drive * easing_drive;
   }
-  
+
   Setpoint1 = current_pos_drive;
 
   pitch = orientationY;
-  
+
   Input1 = pitch+1;
-  
+
   myPID1.Compute();
 
   //Serial.print(" Output1 Pitch: ");
@@ -514,7 +522,7 @@ void motorControlPIDandHeading(){
   if (controlMode == 2) {
     float yaw = map(Output2, -255, 255, Output1, -Output1);
   }
-  
+
   float m1Speed = Output1 + yaw;
   float m2Speed = Output1 - yaw;
 
@@ -526,14 +534,14 @@ void motorControlPIDandHeading(){
 
   sendMotorSpeed(m1Speed, m2Speed);
 
-  
+
 }
 
 float motorDeadzone = 5;
 
 void sendMotorSpeed(float m1Speed, float m2Speed) {
   //mSpeed -255 255
-  
+
   batt_attenuation = constrain(map(returnData.battVoltage, 0, 8.4, 0, 255), 0, 255);
   batt_attenuation = 255 + (255-batt_attenuation);
   int minMotor1 = map(50, 0, 255, 0, batt_attenuation);
@@ -582,12 +590,12 @@ void motorControlPID(){
 
   // Work out the required travel.
   diff_drive = target_pos_drive - current_pos_drive;
-  
+
   // Avoid any strange zero condition
   if( diff_drive != 0.00 ) {
     current_pos_drive += diff_drive * easing_drive;
   }
-  
+
   Setpoint1 = current_pos_drive;
   /*
   Serial.print("target_pos_drive: ");
@@ -599,9 +607,9 @@ void motorControlPID(){
   */
 
   pitch = orientationY;
-  
+
   Input1 = pitch+1;
-  
+
   myPID1.Compute();
 
   //Serial.print(" Output: ");
@@ -700,9 +708,9 @@ void updateMotor()
   if ( abs(joyXLeft) < inputCenterDeadzone ) { joyXLeft = 0; }
   if ( abs(joyXRight) < inputCenterDeadzone ) { joyXRight = 0; }
   if ( abs(joyX) < inputCenterDeadzone ) { joyX = 0; }
-  
+
   if ( abs(joyY) < inputCenterDeadzone ) { joyY = 0; }
-  
+
   //DEBUG_PRINT( "remote: 'joyY: " + (String)joyY + " joyX: " + (String)joyX + " joyXLeft: " + (String)joyXLeft + " joyXRight:" + (String)joyXRight );
 
   // SPEED
@@ -721,7 +729,7 @@ void updateMotor()
   float angleToHead = 0;
 
   DEBUG_PRINT( "orientationX: " + (String)orientationX + " offsetCompass: " + (String)offsetCompass );
-  
+
   if (orientationX >= offsetCompass) {
     angleToHead = orientationX - offsetCompass;
   }
@@ -802,25 +810,25 @@ void updateMotor()
     float scale = (float)outMax / (float)v2Max;
     v2 = v2 * scale;
   }
-  
+
   // set motors direction
 
   //if (motorStop) {
-  
+
     if ( v1 < 0 ) {  m1.backward(); } else if ( v1 > 0 ) { m1.forward(); } else { m1.stop(); }
     if ( v2 < 0 ) {  m2.backward(); } else if ( v2 > 0 ) { m2.forward(); } else { m2.stop(); }
-    
+
   //}
   //else {
-  //  if ( v1 < 0 ) {  m1.backward(); m1D = 0; } else if ( v1 > 0 ) { m1.forward();  m1D = 1; } 
+  //  if ( v1 < 0 ) {  m1.backward(); m1D = 0; } else if ( v1 > 0 ) { m1.forward();  m1D = 1; }
   //    else { if (m1D > 0) { m1.forward(); } else { m1.backward(); } }
-  //    
+  //
   //  if ( v2 < 0 ) {  m2.backward(); m2D = 0; } else if ( v2 > 0 ) { m2.forward();  m2D = 1; }
   //    else { if (m2D > 0) { m2.forward(); } else { m2.backward(); } }
   //}
 
   DEBUG_PRINT( "vOut: " + (String)v1 + " " + (String)v2 );
-  
+
   // setSpeed take only positive value
   v1 = abs( v1 );
   v2 = abs( v2 );
@@ -830,7 +838,7 @@ void updateMotor()
 
   m1.setSpeed(v1);
   m2.setSpeed(v2);
-} 
+}
 
 void resetMotor()
 {
@@ -840,7 +848,7 @@ void resetMotor()
   m2.setSpeed(0);
   m1.stop();
   m2.stop();
-} 
+}
 
 void getData() {
 
@@ -850,11 +858,11 @@ void getData() {
 
     float batteryVoltage = 0.0;
     int total = 0;
-  
+
     for (int i = 0; i < 10; i++) {
       total += analogRead(batteryMeasurePin);
     }
-  
+
     batteryVoltage = (refVoltage / 1024.0) * ((float)total / 10.0);
 
     batteryVoltage = batteryVoltage / ( batteryDividerR2 / (batteryDividerR1 + batteryDividerR2) );
@@ -864,7 +872,7 @@ void getData() {
 }
 
 void initSensor() {
-  
+
   if(!bno.begin())
   {
     /* There was a problem detecting the BNO055 ... check your connections */
@@ -907,7 +915,7 @@ void initSensor() {
       Serial.println(F("\n\nCalibration data loaded into BNO055"));
       foundCalib = true;
   }
-  
+
   delay(1000);
 
   /* Display some basic information on this sensor */
@@ -986,7 +994,7 @@ String uint64ToString(uint64_t number)
   if(part1 == 0){
     return String(part2, DEC);
   }
-  
+
   return String(part1, DEC) + String(part2, DEC);
 }
 
