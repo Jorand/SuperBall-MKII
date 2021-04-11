@@ -172,7 +172,7 @@ void setup() {
   tone(buzzerPin, 2637, 1000/12); // Hello
 
   #ifdef DEBUG
-    Serial.begin(9600);
+    Serial.begin(115200);
     DEBUG_PRINT(F("** LionBall-remote receiver **"));
     printf_begin();
   #endif
