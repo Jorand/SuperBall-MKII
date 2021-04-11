@@ -44,6 +44,13 @@ esplink23.program.extra_params= -P net:192.168.1.59:23  -b{upload.speed}
 ```
 use ip of esp-link and just use upload with programmer `esp-link`.
 
+Important ! set the right upload speed in esp-link. uC Console -> Baud: 57600
+
+#### ESP-LINK web-server
+see dac [WEB-SERVER.md](https://github.com/jeelabs/esp-link/blob/master/WEB-SERVER.md)
+
+To Enable SLIP in the esp-link UI `REST/MQTT` -> `Enable SLIP on serial port` and reboot everything.
+
 ## Utils
 list port osx
 `ls /dev/tty*`
