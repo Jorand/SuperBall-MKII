@@ -1,3 +1,5 @@
+#include <ELClient.h>
+#include <ELClientWebServer.h>
 #include <L298N.h>
 #include <PID_v1.h>
 
@@ -37,6 +39,23 @@ String mySt = "";
 char myChar;
 boolean stringComplete = false;  // whether the string is complete
 
+ELClient esp(&Serial);
+ELClientWebServer webServer(&esp);
+
+// Callback made form esp-link to notify that it has just come out of a reset. This means we
+// need to initialize it!
+void resetCb(void) {
+  Serial.println("EL-Client (re-)starting!");
+  bool ok = false;
+  do {
+    ok = esp.Sync();      // sync up with esp-link, blocks for up to 2 seconds
+    if (!ok) Serial.println("EL-Client sync failed!");
+  } while(!ok);
+  Serial.println("EL-Client synced!");
+
+  webServer.setup();
+}
+
 void setup() {
 	Serial.begin(115200);
 	// m1.forward();
@@ -47,7 +66,7 @@ void setup() {
 	// m1.setSpeed(0);
 	// m1.stop();
 
-	
+
 
 	pinMode(M1_ENCODER_A, INPUT);
 	pinMode(M2_ENCODER_A, INPUT);
@@ -57,6 +76,12 @@ void setup() {
 	Setpoint = 10;
 	myPID.SetMode(AUTOMATIC);
 	myPID.SetOutputLimits(-256, 255);
+
+  // Esp-link
+  pidInit();
+
+  esp.resetCb = resetCb;
+  resetCb();
 }
 
 void detect_m1_a() {
@@ -70,15 +95,20 @@ void detect_m2_a() {
 }
 
 void loop() {
+  esp.Process();
+
+  pidLoop();
+/*
+
 	m1_rps = (m1_step - m1_last_step) / 300.0 / sleep_time*1000;
 
 	m1_last_step = m1_step;
-	
+
 
 	Input = m1_rps;
 	myPID.Compute();
-	Serial.print(Input);
-	// Serial.print("\t");	
+	//Serial.print(Input);
+	// Serial.print("\t");
 	// Serial.print(Output);
 
 	// Serial.print("\t");
@@ -88,8 +118,8 @@ void loop() {
 	// Serial.print("\t");
 	// Serial.print(Kd);
 
-	Serial.print("\t");
-	Serial.println(Setpoint);
+	//Serial.print("\t");
+	//Serial.println(Setpoint);
 	// Serial.printf("%d\t%d\n", m1_rps, Output);
 	if (Output > 0) {
 		m1.backward();
@@ -98,18 +128,18 @@ void loop() {
 	}
 	m1.setSpeed(abs(Output));
 
-	delay(sleep_time);
-
-	while (Serial.available()) {
-		// get the new byte:
-		char inChar = (char)Serial.read();
-		// add it to the inputString:
-		mySt += inChar;
-		// if the incoming character is a newline, set a flag so the main loop can
-		// do something about it:
-		if (inChar == '\n')
-			stringComplete = true;
-	}
+	//delay(sleep_time);
+  //
+	// while (Serial.available()) {
+	// 	// get the new byte:
+	// 	char inChar = (char)Serial.read();
+	// 	// add it to the inputString:
+	// 	mySt += inChar;
+	// 	// if the incoming character is a newline, set a flag so the main loop can
+	// 	// do something about it:
+	// 	if (inChar == '\n')
+	// 		stringComplete = true;
+	// }
 
 	if (stringComplete) {
 		if (mySt.substring(0,2) == "s=")
@@ -125,4 +155,5 @@ void loop() {
 		mySt = "";  //note: in code below, mySt will not become blank, mySt is blank until '\n' is received
 		stringComplete = false;
 	}
+  */
 }
