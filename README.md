@@ -74,6 +74,12 @@ list port osx
 
 # IMU BNO055
 
+### Calibration
+To generate valid calibration data, the following criteria should be met:
+
+- *Gyroscope*: The device must be standing still in any position
+- *Magnetometer*: In the past 'figure 8' motions were required in 3 dimensions, but with recent devices fast magnetic compensation takes place with sufficient normal movement of the device
+- *Accelerometer*: The BNO055 must be placed in 6 standing positions for +X, -X, +Y, -Y, +Z and -Z.  This is the most onerous sensor to calibrate, but the best solution to generate the calibration data is to find a block of wood or similar object, and place the sensor on each of the 6 'faces' of the block, which will help to maintain sensor alignment during the calibration process.  You should still be able to get reasonable quality data from the BNO055, however, even if the accelerometer isn't entirely or perfectly calibrated.
 
 # Electronics Remote
 (Arduino Uno/Diecimila/Duemilanove)
@@ -135,7 +141,9 @@ LEFT MOTOR
 * BNO055 SDA -> A4
 * BNO055 SCL -> A5
 
-* BATT + -> 100K resistor -> A2 -> 10K resistor + (100nf cap) -> GND
+* BATT + -> 100K resistor -> A6 -> 10K resistor + (parallel 100nf cap) -> GND
+
+* LED Data in -> A2
 ```
 
 ## Test
