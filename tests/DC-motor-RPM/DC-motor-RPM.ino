@@ -2,6 +2,7 @@
 #include <ELClientWebServer.h>
 #include <L298N.h>
 #include <PID_v1.h>
+#include "printf.h"
 
 /* MOTOR */
 #define M1_EN 5
@@ -82,6 +83,8 @@ void setup() {
 
   esp.resetCb = resetCb;
   resetCb();
+
+  Serial.println("hello");
 }
 
 void detect_m1_a() {
@@ -98,7 +101,7 @@ void loop() {
   esp.Process();
 
   pidLoop();
-/*
+
 
 	m1_rps = (m1_step - m1_last_step) / 300.0 / sleep_time*1000;
 
@@ -107,9 +110,9 @@ void loop() {
 
 	Input = m1_rps;
 	myPID.Compute();
-	//Serial.print(Input);
-	// Serial.print("\t");
-	// Serial.print(Output);
+	Serial.print(Input);
+	Serial.print("\t");
+	Serial.print(Output);
 
 	// Serial.print("\t");
 	// Serial.print(Kp);
@@ -118,9 +121,9 @@ void loop() {
 	// Serial.print("\t");
 	// Serial.print(Kd);
 
-	//Serial.print("\t");
-	//Serial.println(Setpoint);
-	// Serial.printf("%d\t%d\n", m1_rps, Output);
+	Serial.print("\t");
+	Serial.println(Setpoint);
+	//Serial.printf("%d\t%d\n", m1_rps, Output);
 	if (Output > 0) {
 		m1.backward();
 	} else {
@@ -128,18 +131,18 @@ void loop() {
 	}
 	m1.setSpeed(abs(Output));
 
-	//delay(sleep_time);
-  //
-	// while (Serial.available()) {
-	// 	// get the new byte:
-	// 	char inChar = (char)Serial.read();
-	// 	// add it to the inputString:
-	// 	mySt += inChar;
-	// 	// if the incoming character is a newline, set a flag so the main loop can
-	// 	// do something about it:
-	// 	if (inChar == '\n')
-	// 		stringComplete = true;
-	// }
+	delay(sleep_time);
+
+	while (Serial.available()) {
+		// get the new byte:
+		char inChar = (char)Serial.read();
+		// add it to the inputString:
+		mySt += inChar;
+		// if the incoming character is a newline, set a flag so the main loop can
+		// do something about it:
+		if (inChar == '\n')
+			stringComplete = true;
+	}
 
 	if (stringComplete) {
 		if (mySt.substring(0,2) == "s=")
@@ -155,5 +158,5 @@ void loop() {
 		mySt = "";  //note: in code below, mySt will not become blank, mySt is blank until '\n' is received
 		stringComplete = false;
 	}
-  */
+
 }

@@ -1,0 +1,47 @@
+<!-- EspLink will add header here -->
+<style media="screen">
+  .pure-table td input {
+    width: 100%;
+  }
+</style>
+<div class="header">
+  <h1>PID Tuning</h1>
+</div>
+
+<div class="content">
+  <div class="pure-g">
+    <div class="pure-u-1">
+      <div class="card">
+        <h1>PID Settings</h1>
+        <form class="pure-form">
+          <table class="pure-table pure-table-bordered" align="center">
+            <tr>
+              <td></td>
+              <td>P</td>
+              <td>I</td>
+              <td>D</td>
+            </tr>
+            <tr>
+              <td>MOTOR</td>
+              <td><input name="motor_p" type="number" step="0.01" min="0"/></td>
+              <td><input name="motor_i" type="number" step="0.01" min="0"/></td>
+              <td><input name="motor_d" type="number" step="0.01" min="0"/></td>
+            </tr>
+          </table>
+          <br>
+          <button type="submit" class="pure-button button-primary">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="pure-g">
+    <div class="pure-u-1 pure-u-md-1-2">
+      <div class="card">
+        <h2><div id="text"/></h2>
+        <button id="btn_on" type="button">Turn on</button>
+        <button id="btn_off" type="button">Turn off</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

@@ -9,7 +9,7 @@ unsigned int integerValue=0;  // Max value is 65535
 char incomingByte;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(enA, OUTPUT);
   pinMode(in1, OUTPUT);
   pinMode(in2, OUTPUT);
@@ -29,7 +29,7 @@ void loop() {
       }
       Serial.println(integerValue);
   }
-  
+
   motor_value = integerValue;
   if(motor_value > 0){
     MotorCounterClockwise(motor_value);
