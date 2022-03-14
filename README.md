@@ -9,12 +9,15 @@ For that i'm using an IMU (BNO055) and the two motors have encoded wheel. The re
 ## Arduino IDE
 ** Upload Settings **
 Board: "Arduino Nano"
-Processor: "ATmega328P (Old Bootloader)"
+Processor: "ATmega328P"
 
 ### esp-link
 
 #### Flash with esptool
 Download the latest [release](https://github.com/jeelabs/esp-link/releases).
+I'm using esp-link v3.0.14-g963ffbb
+
+tips : Open terminal and type: `ls /dev/tty.*` to find the port number
 
 ```
 esptool.py --port /dev/tty.wchusbserial14130 --baud 230400 write_flash -fs 32m -ff 80m \
@@ -29,22 +32,36 @@ for more infos see [esp-link](https://github.com/jeelabs/esp-link)
 - TX: connect to RX of microcontroller
 - GND: connect to GND of microcontroller
 
-####
+#### Flash with Arduino IDE
+
+Important ! set the right upload speed in esp-link. uC Console -> Baud: 115200
+
+##### Option 1
+
+Go to `/Applications/Arduino.app/Contents/Java/hardware/arduino/avr/`
 Add this to your programmers.txt file:
 ```
 esplink.name=esp-link 2032
 esplink.program.tool=avrdude
 esplink.protocol=arduino
-esplink.program.extra_params= -P net:192.168.1.59:2323  -b{upload.speed}
+esplink.program.extra_params= -P net:192.168.1.70:2323  -b{upload.speed}
 
 esplink23.name=esp-link
 esplink23.program.tool=avrdude
 esplink23.protocol=arduino
-esplink23.program.extra_params= -P net:192.168.1.59:23  -b{upload.speed}
+esplink23.program.extra_params= -P net:192.168.1.70:23  -b{upload.speed}
 ```
 use ip of esp-link and just use upload with programmer `esp-link`.
 
-Important ! set the right upload speed in esp-link. uC Console -> Baud: 57600
+###### Upload
+
+In Arduino IDE don't select network port and une use upload with programmer `esp-link` to burn the file
+
+
+##### Option 2
+
+Remember to use a recent version of Arduino IDE and to set mDNS sevice name to "arduino" in esp-link... if you do not change the service name it will not show up as a "Network Port" in the Arduino IDE.
+
 
 #### ESP-LINK web-server
 see dac [WEB-SERVER.md](https://github.com/jeelabs/esp-link/blob/master/WEB-SERVER.md)
@@ -54,6 +71,9 @@ To Enable SLIP in the esp-link UI `REST/MQTT` -> `Enable SLIP on serial port` an
 ## Utils
 list port osx
 `ls /dev/tty*`
+
+# IMU BNO055
+
 
 # Electronics Remote
 (Arduino Uno/Diecimila/Duemilanove)
