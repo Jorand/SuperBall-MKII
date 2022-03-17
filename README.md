@@ -99,6 +99,10 @@ OLED SSD1306 128X32
 - BNO055
 - L298N
 - Motor 19:1 Metal Gearmotor 37Dx68L 12V 540 RPM
+  Vitesse de rotation: 12 V	530 RPM, 200 mA	8.5 kg⋅cm (120 oz⋅in), 5.5 A
+  https://www.pololu.com/product/4751
+  1200 counts per revolution
+  18.75:1 metal gearbox
 
 Connections you will need.
 

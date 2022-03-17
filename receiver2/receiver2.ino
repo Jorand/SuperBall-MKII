@@ -8,10 +8,12 @@
 #include <utility/imumaths.h>
 #include <EEPROM.h>
 
-#include <FastLED.h>
-
 #include <L298N.h>
+#include <PID_v1.h>
 
+#include <FastLED.h>
+#include "MegunoLink.h"
+TimePlot MyPlot;
 
 #define DEBUG
 
@@ -64,20 +66,43 @@ float batteryDividerR2 = 10000.0; // resistance of R2 (10K)
 const float refVoltage = 1.1;
 
 /*** Motors ***/
-#define enA 6
-#define in1 7
-#define in2 8
-#define enB 5
-#define in3 2
-#define in4 4
+#define enA 5
+#define in1 4
+#define in2 7
+#define in3 8
+#define in4 15
+#define enB 6
 
 L298N m1(enA, in1, in2);
 L298N m2(enB, in4, in3);
 
+#define M1_ENCODER_A 3
+#define M1_ENCODER_B 17
+
+#define M2_ENCODER_A 2
+#define M2_ENCODER_B 14
+
+volatile long m1_encoder_pos = 0;
+long m1_pos = 0;
+long m1_old_pos = 0;
+long m1_speed = 0;
+int m1_dir = 0;
+
+volatile long m2_encoder_pos = 0;
+long m2_pos = 0;
+long m2_old_pos = 0;
+long m2_speed = 0;
+int m2_dir = 0;
+
+int motor1PWM = 0;
+
+unsigned long encodersNewTime;
+unsigned long encodersOldTime;
 
 /*** IMU BNO055 ***/
 /* Set the delay between fresh samples */
-#define BNO055_SAMPLERATE_DELAY_MS (20) // 1000/20 = 50 time per seconde
+#define INTERVAL 20
+#define BNO055_SAMPLERATE_DELAY_MS (INTERVAL) // 1000/20 = 50 time per seconde
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 unsigned long sensorLastMillis;
 
@@ -98,14 +123,55 @@ int controlMode = 0; // 0 = disable radio lost, 1 = manual+stabY, 2 = heading/st
 int remoteModeSetting = 1;
 int nbModes = 4;
 
+int yaw;
+int pitch;
+int joybtn;
+
+int rawJoyY = 127, joyY, rawJoyX = 127, joyX, joyXLeft, joyXRight;
+
+
+// PID yaw
+double Pk1 = 0.3;
+double Ik1 = 2;
+double Dk1 = 0.011;
+
+double Setpoint1, Input1, Output1;    // PID variables
+PID PID_dir(&Input1, &Output1, &Setpoint1, Pk1, Ik1 , Dk1, DIRECT);    // PID Setup
+
+// PID pitch
+double Pk2 = 0.7;
+double Ik2 = 0;
+double Dk2 = 0.02;
+// double Pk2 = 2.25;
+// double Ik2 = 17;
+// double Dk2 = 0.024;
+
+double Setpoint2, Input2, Output2;    // PID variables
+PID PID_angle(&Input2, &Output2, &Setpoint2, Pk2, Ik2 , Dk2, DIRECT);    // PID Setup
+
+// PID encoder M1
+double Pk3 = 10;
+double Ik3 = 0;
+double Dk3 = 0;
+
+double Setpoint3, Input3, Output3;    // PID variables
+PID PID_m1(&Input3, &Output3, &Setpoint3, Pk3, Ik3 , Dk3, DIRECT);    // PID Setup
+
+// PID encoder M2
+double Pk4 = 10;
+double Ik4 = 0;
+double Dk4 = 0;
+
+double Setpoint4, Input4, Output4;    // PID variables
+PID PID_m2(&Input4, &Output4, &Setpoint4, Pk4, Ik4 , Dk4, DIRECT);    // PID Setup
+
+float output1;
+float output2;
+float output3;
+float output4;
+
 void setup(void)
 {
-  #ifdef DEBUG
-    Serial.begin(115200);
-    DEBUG_PRINT(F("** SuperBall receiver **"));
-    printf_begin();
-  #endif
-
   analogReference(INTERNAL); // looks like it's more precise for battery voltage reading
   pinMode(batteryMeasurePin, INPUT);
 
@@ -117,6 +183,12 @@ void setup(void)
   setAll(0, 0, 0);
   setPixel(0, 255, 0, 0);
   showStrip();
+
+  #ifdef DEBUG
+    Serial.begin(115200);
+    //DEBUG_PRINT(F("** SuperBall receiver **"));
+    printf_begin();
+  #endif
 
   resetMotor();
 
@@ -135,12 +207,37 @@ void setup(void)
   radio.startListening();
 
   #ifdef DEBUG
-    DEBUG_PRINT(F("Printing receiver details"));
-    radio.printDetails();
+    // DEBUG_PRINT(F("Printing receiver details"));
+    // radio.printDetails();
   #endif
 
   setAll(0, 0, 0);
   digitalWrite(LED_BUILTIN, LOW);
+
+  pinMode(M1_ENCODER_A, INPUT);
+	pinMode(M1_ENCODER_B, INPUT);
+  pinMode(M2_ENCODER_A, INPUT);
+	pinMode(M2_ENCODER_B, INPUT);
+
+	attachInterrupt(digitalPinToInterrupt(M1_ENCODER_A), detect_m1_a, RISING);
+	attachInterrupt(digitalPinToInterrupt(M2_ENCODER_A), detect_m2_a, RISING);
+
+  PID_dir.SetMode(AUTOMATIC);
+  PID_dir.SetOutputLimits(-255, 255);
+  PID_dir.SetSampleTime(10);
+
+  PID_angle.SetMode(AUTOMATIC);
+  PID_angle.SetOutputLimits(-500, 500);
+  PID_angle.SetSampleTime(10);
+
+  PID_m1.SetMode(AUTOMATIC);
+  PID_m1.SetOutputLimits(-255, 255);
+  PID_m1.SetSampleTime(10);
+
+  PID_m2.SetMode(AUTOMATIC);
+  PID_m2.SetOutputLimits(-255, 255);
+  PID_m2.SetSampleTime(10);
+
 }
 
 void loop() {
@@ -148,9 +245,9 @@ void loop() {
   /* Begin listen for transmission */
   while (radio.available()) {
     radio.read( &remPackage, sizeof(remPackage) );
-    /*
-    Serial.println("New package: '" + (String)remPackage.type + "-" + (String)remPackage.ch1 + "-" + (String)remPackage.ch2 + "-" + (String)remPackage.ch3 + "-" + (String)remPackage.ch4 + "-" + (String)remPackage.ch5 + "-" + (String)remPackage.ch6 + "-" + (String)remPackage.ch7 + "'");
-    */
+
+    // DEBUG_PRINT( uint64ToAddress(pipe) + " - New package: '" + (String)remPackage.type + "-" + (String)remPackage.ch1 + "-" + (String)remPackage.ch2 + "-" + (String)remPackage.ch3 + "-" + (String)remPackage.ch4 + "-" + (String)remPackage.ch5 + "-" + (String)remPackage.ch6 + "-" + (String)remPackage.ch7 + "'" );
+
     if( remPackage.type <= 2 ){
       timeoutTimer = millis();
       recievedData = true;
@@ -165,17 +262,31 @@ void loop() {
 
     statusMode = CONNECTED;
 
-    if(remPackage.type == 0) {
+    switch (remPackage.type) {
+      case 0:
 
-      controlMode = remoteModeSetting;
+        rawJoyY = remPackage.ch2;
+        rawJoyX = remPackage.ch1;
+        // joyXLeft = map(remPackage.ch1, 127, 0, 0, 255);
+        // joyXLeft = constrain(joyXLeft, 0, 255);
+        // if ( abs(joyXLeft) < inputCenterDeadzone ) { joyXLeft = 0; }
 
-      returnData.controlMode = controlMode;
+        // joyXRight = map(remPackage.ch1, 127, 255, 0, 255);
+        // joyXRight = constrain(joyXRight, 0, 255);
+        // if ( abs(joyXRight) < inputCenterDeadzone ) { joyXRight = 0; }
 
-      radio.writeAckPayload(1, &returnData, sizeof(returnData));
-    }
-    else {
-      controlMode = 0;
-      resetMotor();
+        remoteAction();
+
+        controlMode = remoteModeSetting;
+
+        returnData.controlMode = controlMode;
+
+        radio.writeAckPayload(1, &returnData, sizeof(returnData));
+        break;
+      case 1:
+        controlMode = 0;
+        resetMotor();
+        break;
     }
 
     recievedData = false;
@@ -191,7 +302,7 @@ void loop() {
     controlMode = 0;
     timeoutTimer = millis();
 
-    DEBUG_PRINT( uint64ToAddress(pipe) + " - Timeout");
+    //DEBUG_PRINT( uint64ToAddress(pipe) + " - Timeout");
   }
   /* End timeout handling */
 
@@ -200,23 +311,193 @@ void loop() {
 
     updateSensor();
 
+    // add control mode for disable Magnetometer
     switch (controlMode) {
       case 0:
         resetMotor();
         break;
       case 1:
-        //motorControlPIDandHeading();
-        //motorControlPID();
+        balance();
         break;
       case 2:
-        //motorControlPIDandHeading();
+        balance();
         break;
       case 3:
-        //motorControlPID();
+        balance();
         break;
       case 4:
         resetMotor();
         break;
+    }
+  }
+}
+
+void balance() {
+  // ici le code pour l'équilibre
+
+  // 1. get Setpoint
+  // 2. get data imu
+  // 3. pid from Setpoint
+  // 4. output to motor speed
+
+  // 5. yaw offset
+  // 6. yaw pid
+  // 7. apply yaw correction to motor speed
+
+  // 8. motor speed pid
+
+
+  // threshold remote data
+  joyX = thresholdStick(rawJoyX);
+  joyY = thresholdStick(rawJoyY);
+
+  joybtn = remPackage.ch7;
+
+  Setpoint2 = joyY/3;
+  Input2 = orientationY;
+  PID_angle.Compute();
+  // Serial.print("Setpoint2:");
+  // Serial.print(Setpoint2);
+  // Serial.print(" orientationY:");
+  // Serial.print(orientationY);
+  // Serial.print(" output2:");
+  // Serial.print(Output2);
+  // Serial.println();
+  MyPlot.SendData("joyY", joyY);
+  MyPlot.SendData("Setpoint2", Setpoint2);
+  MyPlot.SendData("orientationY", orientationY);
+
+  ///
+
+  int targetSpeed = Output2*-1; //RPM
+
+  m1_pos = m1_encoder_pos;
+  m2_pos = m2_encoder_pos;
+  encodersNewTime = millis();
+  // m1_speed = (m1_pos - m1_old_pos) * 1000 / (encodersNewTime - encodersOldTime); // encoder ticks per second
+  m1_speed = ((m1_pos - m1_old_pos) * (1000/INTERVAL)) * 60 / 1200; // rpm
+  m2_speed = ((m2_pos - m2_old_pos) * (1000/INTERVAL)) * 60 / 1200; // rpm
+  // MyPlot.SendData("target", targetSpeed);
+  // MyPlot.SendData("m1_speed", m1_speed);
+
+  // Serial.print("target:");
+  // Serial.print(targetSpeed);
+  // Serial.print(" m1_speed:");
+  // Serial.print(m1_speed);
+  // Serial.print(" m2_speed:");
+  // Serial.print(m2_speed*-1);
+  // Serial.println();
+  m1_old_pos = m1_pos;
+  m2_old_pos = m2_pos;
+  encodersOldTime = encodersNewTime;
+
+  Setpoint3 = targetSpeed;
+  Input3 = m1_speed;
+  PID_m1.Compute();
+
+  Setpoint4 = -targetSpeed;
+  Input4 = m2_speed;
+  PID_m2.Compute();
+
+  setMotorSpeed(Output3, Output4);
+}
+
+int inputCenterDeadzone = 4;
+
+int thresholdStick (int pos) {
+
+    // get zero centre position
+    pos = pos - 127;
+
+    // threshold value for control sticks
+    if (pos > inputCenterDeadzone) {
+      pos = pos - inputCenterDeadzone;
+    }
+    else if (pos < -inputCenterDeadzone) {
+      pos = pos + inputCenterDeadzone;
+    }
+    else {
+      pos = 0;
+    }
+
+    return pos;
+}
+
+void detect_m1_a() {
+	m1_dir = digitalRead(M1_ENCODER_B) ? 1 : -1; //read direction of motor
+	m1_encoder_pos+=m1_dir; //increasing encoder at new pulse
+}
+
+void detect_m2_a() {
+	m2_dir = digitalRead(M2_ENCODER_B) ? 1 : -1; //read direction of motor
+	m2_encoder_pos+=m2_dir; //increasing encoder at new pulse
+}
+
+void motorControl() {
+
+}
+
+void setMotorSpeed(float m1Speed, float m2Speed) {
+  if (m1Speed > 0 && joybtn == 0) {
+    m1Speed = constrain(m1Speed,0,255);
+    m1.setSpeed(m1Speed);
+    m1.backward();
+  }
+  else if (m1Speed < 0 && joybtn == 0) {
+    int wheel2a = abs(m1Speed);
+    wheel2a = constrain(wheel2a,0,255);
+    m1.setSpeed(wheel2a);
+    m1.forward();
+  }
+  else {
+    m1.stop();
+    m1.setSpeed(0);
+  }
+
+  if (m2Speed > 0 && joybtn == 0) {
+    m2Speed = constrain(m2Speed,0,255);
+    m2.setSpeed(m2Speed);
+    m2.backward();
+  }
+  else if (m2Speed < 0 && joybtn == 0) {
+    int wheel2b = abs(m2Speed);
+    wheel2b = constrain(wheel2b,0,255);
+    m2.setSpeed(wheel2b);
+    m2.forward();
+  }
+  else {
+    m2.stop();
+    m2.setSpeed(0);
+  }
+}
+
+unsigned long lastModeButtonPress;
+
+void remoteAction() {
+  // here all action triggered by the remote
+
+  // Set front side
+  if (remPackage.ch3 && remPackage.ch6) {
+    Serial.println("Place the light in front of you …");
+    setCompassOffset();
+  }
+
+  else if (remPackage.ch4) {
+    // do something
+
+  }
+
+  else if (remPackage.ch5) {
+
+    if (millis() - lastModeButtonPress >= 250 ) {
+
+      remoteModeSetting ++;
+
+      if (remoteModeSetting > nbModes) {
+        remoteModeSetting = 1;
+      }
+
+      lastModeButtonPress = millis();
     }
   }
 }
@@ -273,8 +554,8 @@ void getData() {
 }
 
 void resetMotor() {
-  //rawJoyY = 127;
-  //rawJoyX = 127;
+  rawJoyY = 127;
+  rawJoyX = 127;
   m1.setSpeed(0);
   m2.setSpeed(0);
   m1.stop();
@@ -282,23 +563,24 @@ void resetMotor() {
 }
 
 void setCompassOffset() {
+  // save current heading position as offset
   sensors_event_t event;
   bno.getEvent(&event);
   offsetCompass = event.orientation.x;
-  Serial.println("\nOffset : ");
-  Serial.print(offsetCompass);
-  Serial.println("\nCentering Done!");
-  Serial.println("");
+  // Serial.println("\nOffset : ");
+  // Serial.print(offsetCompass);
+  // Serial.println("\nCentering Done!");
+  // Serial.println("");
 }
 
 void initSensor() {
-  Serial.println("Orientation Sensor Test"); Serial.println("");
+  //Serial.println("Orientation Sensor Test"); Serial.println("");
 
   /* Initialise the sensor */
   if (!bno.begin())
   {
       /* There was a problem detecting the BNO055 ... check your connections */
-      Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+      //Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
       while (1);
   }
 
@@ -320,31 +602,31 @@ void initSensor() {
   bno.getSensor(&sensor);
   if (bnoID != sensor.sensor_id)
   {
-      Serial.println("\nNo Calibration Data for this sensor exists in EEPROM");
+      //Serial.println("\nNo Calibration Data for this sensor exists in EEPROM");
       delay(500);
   }
   else
   {
-      Serial.println("\nFound Calibration for this sensor in EEPROM.");
+      //Serial.println("\nFound Calibration for this sensor in EEPROM.");
       eeAddress += sizeof(long);
       EEPROM.get(eeAddress, calibrationData);
 
-      displaySensorOffsets(calibrationData);
+      // displaySensorOffsets(calibrationData);
 
-      Serial.println("\n\nRestoring Calibration data to the BNO055...");
+      //Serial.println("\n\nRestoring Calibration data to the BNO055...");
       bno.setSensorOffsets(calibrationData);
 
-      Serial.println("\n\nCalibration data loaded into BNO055");
+      //Serial.println("\n\nCalibration data loaded into BNO055");
       foundCalib = true;
   }
 
   // delay(1000);
 
   /* Display some basic information on this sensor */
-  displaySensorDetails();
+  //displaySensorDetails();
 
   /* Optional: Display current status */
-  displaySensorStatus();
+  //displaySensorStatus();
 
  //Crystal must be configured AFTER loading calibration data into BNO055.
   bno.setExtCrystalUse(true);
@@ -384,14 +666,14 @@ void initSensor() {
       }
   }
 
-  Serial.println("\nFully calibrated!");
-  Serial.println("--------------------------------");
-  Serial.println("Calibration Results: ");
+  // Serial.println("\nFully calibrated!");
+  // Serial.println("--------------------------------");
+  // Serial.println("Calibration Results: ");
   adafruit_bno055_offsets_t newCalib;
   bno.getSensorOffsets(newCalib);
-  displaySensorOffsets(newCalib);
+  // displaySensorOffsets(newCalib);
 
-  Serial.println("\n\nStoring calibration data to EEPROM...");
+  // Serial.println("\n\nStoring calibration data to EEPROM...");
 
   eeAddress = 0;
   bno.getSensor(&sensor);
@@ -401,9 +683,9 @@ void initSensor() {
 
   eeAddress += sizeof(long);
   EEPROM.put(eeAddress, newCalib);
-  Serial.println("Data stored to EEPROM.");
+  // Serial.println("Data stored to EEPROM.");
 
-  Serial.println("\n--------------------------------\n");
+  // Serial.println("\n--------------------------------\n");
   delay(500);
 }
 
