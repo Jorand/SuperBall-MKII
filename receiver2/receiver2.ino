@@ -101,8 +101,8 @@ unsigned long encodersOldTime;
 
 /*** IMU BNO055 ***/
 /* Set the delay between fresh samples */
-#define INTERVAL 20
-#define BNO055_SAMPLERATE_DELAY_MS (INTERVAL) // 1000/20 = 50 time per seconde
+#define INTERVAL 10
+#define BNO055_SAMPLERATE_DELAY_MS (10) // 1000/20 = 50 time per seconde
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 unsigned long sensorLastMillis;
 
@@ -139,9 +139,9 @@ double Setpoint1, Input1, Output1;    // PID variables
 PID PID_dir(&Input1, &Output1, &Setpoint1, Pk1, Ik1 , Dk1, DIRECT);    // PID Setup
 
 // PID pitch
-double Pk2 = 0.7;
+double Pk2 = 0.9; //1.4
 double Ik2 = 0;
-double Dk2 = 0.02;
+double Dk2 = 0;
 // double Pk2 = 2.25;
 // double Ik2 = 17;
 // double Dk2 = 0.024;
@@ -150,7 +150,7 @@ double Setpoint2, Input2, Output2;    // PID variables
 PID PID_angle(&Input2, &Output2, &Setpoint2, Pk2, Ik2 , Dk2, DIRECT);    // PID Setup
 
 // PID encoder M1
-double Pk3 = 10;
+double Pk3 = 1.6; //1.4
 double Ik3 = 0;
 double Dk3 = 0;
 
@@ -158,12 +158,12 @@ double Setpoint3, Input3, Output3;    // PID variables
 PID PID_m1(&Input3, &Output3, &Setpoint3, Pk3, Ik3 , Dk3, DIRECT);    // PID Setup
 
 // PID encoder M2
-double Pk4 = 10;
-double Ik4 = 0;
-double Dk4 = 0;
+// double Pk4 = 10;
+// double Ik4 = 0;
+// double Dk4 = 0;
 
 double Setpoint4, Input4, Output4;    // PID variables
-PID PID_m2(&Input4, &Output4, &Setpoint4, Pk4, Ik4 , Dk4, DIRECT);    // PID Setup
+PID PID_m2(&Input4, &Output4, &Setpoint4, Pk3, Ik3 , Dk3, DIRECT);    // PID Setup
 
 float output1;
 float output2;
@@ -306,6 +306,7 @@ void loop() {
   }
   /* End timeout handling */
 
+  // start timed event
   if (millis() - sensorLastMillis > BNO055_SAMPLERATE_DELAY_MS) {
     sensorLastMillis = millis();
 
@@ -332,6 +333,8 @@ void loop() {
   }
 }
 
+int current_pos_drive;  // variables for smoothing main drive
+
 void balance() {
   // ici le code pour l'équilibre
 
@@ -353,7 +356,19 @@ void balance() {
 
   joybtn = remPackage.ch7;
 
-  Setpoint2 = joyY/3;
+  double easing_drive = 900; //modify this value for stick smoothing sensitivity
+  easing_drive /= 1000;
+
+  int target_pos_drive = joyY/3;
+  // Work out the required travel.
+  int diff_drive = target_pos_drive - current_pos_drive;
+
+  // Avoid any strange zero condition
+  if( diff_drive != 0.00 ) {
+    current_pos_drive += diff_drive * easing_drive;
+  }
+
+  Setpoint2 = current_pos_drive;
   Input2 = orientationY;
   PID_angle.Compute();
   // Serial.print("Setpoint2:");
@@ -363,9 +378,9 @@ void balance() {
   // Serial.print(" output2:");
   // Serial.print(Output2);
   // Serial.println();
-  MyPlot.SendData("joyY", joyY);
-  MyPlot.SendData("Setpoint2", Setpoint2);
-  MyPlot.SendData("orientationY", orientationY);
+  // MyPlot.SendData("joyY", joyY);
+  // MyPlot.SendData("Setpoint2", Setpoint2);
+  // MyPlot.SendData("orientationY", orientationY);
 
   ///
 
@@ -375,10 +390,13 @@ void balance() {
   m2_pos = m2_encoder_pos;
   encodersNewTime = millis();
   // m1_speed = (m1_pos - m1_old_pos) * 1000 / (encodersNewTime - encodersOldTime); // encoder ticks per second
+
+  // (encoder tick * 1s/INTERVAL) * 60 / encodercount = rpm
   m1_speed = ((m1_pos - m1_old_pos) * (1000/INTERVAL)) * 60 / 1200; // rpm
   m2_speed = ((m2_pos - m2_old_pos) * (1000/INTERVAL)) * 60 / 1200; // rpm
   // MyPlot.SendData("target", targetSpeed);
   // MyPlot.SendData("m1_speed", m1_speed);
+  // MyPlot.SendData("m2_speed", m2_speed*-1);
 
   // Serial.print("target:");
   // Serial.print(targetSpeed);
@@ -398,6 +416,11 @@ void balance() {
   Setpoint4 = -targetSpeed;
   Input4 = m2_speed;
   PID_m2.Compute();
+
+  MyPlot.SendData("target", targetSpeed);
+  MyPlot.SendData("m1_speed", m1_speed);
+  MyPlot.SendData("Output3", Output3);
+  // MyPlot.SendData("m2_speed", Output4*-1);
 
   setMotorSpeed(Output3, Output4);
 }
@@ -437,15 +460,20 @@ void motorControl() {
 
 }
 
+float motorDeadzone = 0;
+
 void setMotorSpeed(float m1Speed, float m2Speed) {
-  if (m1Speed > 0 && joybtn == 0) {
+
+  if (m1Speed > motorDeadzone && joybtn == 0) {
     m1Speed = constrain(m1Speed,0,255);
+    m1Speed = map(m1Speed, 0, 255, 60, 255);
     m1.setSpeed(m1Speed);
     m1.backward();
   }
-  else if (m1Speed < 0 && joybtn == 0) {
+  else if (m1Speed < -motorDeadzone && joybtn == 0) {
     int wheel2a = abs(m1Speed);
     wheel2a = constrain(wheel2a,0,255);
+    wheel2a = map(wheel2a, 0, 255, 60, 255);
     m1.setSpeed(wheel2a);
     m1.forward();
   }
@@ -454,14 +482,16 @@ void setMotorSpeed(float m1Speed, float m2Speed) {
     m1.setSpeed(0);
   }
 
-  if (m2Speed > 0 && joybtn == 0) {
+  if (m2Speed > motorDeadzone && joybtn == 0) {
     m2Speed = constrain(m2Speed,0,255);
+    m2Speed = map(m2Speed, 0, 255, 60, 255);
     m2.setSpeed(m2Speed);
     m2.backward();
   }
-  else if (m2Speed < 0 && joybtn == 0) {
+  else if (m2Speed < -motorDeadzone && joybtn == 0) {
     int wheel2b = abs(m2Speed);
     wheel2b = constrain(wheel2b,0,255);
+    wheel2b = map(wheel2b, 0, 255, 60, 255);
     m2.setSpeed(wheel2b);
     m2.forward();
   }
