@@ -7,6 +7,8 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 #include <EEPROM.h>
+#include <util/atomic.h>
+#include <Filters.h>
 
 #include <L298N.h>
 #include <PID_v1.h>
@@ -76,6 +78,8 @@ const float refVoltage = 1.1;
 L298N m1(enA, in1, in2);
 L298N m2(enB, in4, in3);
 
+#define ENCODEROUTPUT 1200
+
 #define M1_ENCODER_A 3
 #define M1_ENCODER_B 17
 
@@ -85,7 +89,7 @@ L298N m2(enB, in4, in3);
 volatile long m1_encoder_pos = 0;
 long m1_pos = 0;
 long m1_old_pos = 0;
-long m1_speed = 0;
+float m1_speed = 0;
 int m1_dir = 0;
 
 volatile long m2_encoder_pos = 0;
@@ -99,9 +103,12 @@ int motor1PWM = 0;
 unsigned long encodersNewTime;
 unsigned long encodersOldTime;
 
+const byte ppr = 1200, upDatesPerSec = 100;
+const float konstant = 60.0 * upDatesPerSec / (ppr * 2);
+
 /*** IMU BNO055 ***/
 /* Set the delay between fresh samples */
-#define INTERVAL 10
+#define INTERVAL 10 // 10ms per cycle (100Hz)
 #define BNO055_SAMPLERATE_DELAY_MS (10) // 1000/20 = 50 time per seconde
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 unsigned long sensorLastMillis;
@@ -139,7 +146,7 @@ double Setpoint1, Input1, Output1;    // PID variables
 PID PID_dir(&Input1, &Output1, &Setpoint1, Pk1, Ik1 , Dk1, DIRECT);    // PID Setup
 
 // PID pitch
-double Pk2 = 0.9; //1.4
+double Pk2 = 2.4; //1.4
 double Ik2 = 0;
 double Dk2 = 0;
 // double Pk2 = 2.25;
@@ -150,9 +157,9 @@ double Setpoint2, Input2, Output2;    // PID variables
 PID PID_angle(&Input2, &Output2, &Setpoint2, Pk2, Ik2 , Dk2, DIRECT);    // PID Setup
 
 // PID encoder M1
-double Pk3 = 1.6; //1.4
-double Ik3 = 0;
-double Dk3 = 0;
+double Pk3 = 4.7;     // 1.4    | 2    | 10
+double Ik3 = 0;     // 0.025  | 0    | 0
+double Dk3 = 0.15;   // 0      | 0.09 | 0.4
 
 double Setpoint3, Input3, Output3;    // PID variables
 PID PID_m1(&Input3, &Output3, &Setpoint3, Pk3, Ik3 , Dk3, DIRECT);    // PID Setup
@@ -169,6 +176,20 @@ float output1;
 float output2;
 float output3;
 float output4;
+
+String mySt = "";
+char myChar;
+boolean stringComplete = false;  // whether the string is complete
+
+double setSpeed1 = 0;
+double setSpeed2 = 0;
+
+volatile float velocity_i = 0;
+volatile long prevT_i = 0;
+
+long prevT = 0;
+
+FilterOnePole lowpassFilter(LOWPASS, 1.5); //5 Hz
 
 void setup(void)
 {
@@ -306,6 +327,68 @@ void loop() {
   }
   /* End timeout handling */
 
+  /*
+  encodersNewTime = millis();
+  if (encodersNewTime - encodersOldTime > 10) {
+    encodersOldTime = encodersNewTime;
+
+    // noInterrupts();
+    //   m1_pos = m1_encoder_pos;
+    //   m2_pos = m2_encoder_pos;
+    // interrupts();
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+      m1_pos = m1_encoder_pos;
+      m2_pos = m2_encoder_pos;
+    }
+
+    int enc_count = m1_pos - m1_old_pos;
+    int enc2_count = m2_pos - m2_old_pos;
+
+    // Revolutions per minute (RPM) =
+    // (total encoder pulse in 1s / motor encoder output) x 60s
+    // m1_speed = (m1_pos - m1_old_pos) * (60 * 1000 / (encodersNewTime-encodersOldTime));
+    // m2_speed = (m2_pos - m2_old_pos) * (60 * 1000 / (encodersNewTime-encodersOldTime));
+
+    m1_speed = (enc_count * (1000/INTERVAL)) * 60 / ENCODEROUTPUT; // rpm
+    m2_speed = (enc2_count * (1000/INTERVAL)) * 60 / ENCODEROUTPUT; // rpm
+
+    // Only update display when there have readings
+    // MyPlot.SendData("m1_speed", m1_speed);
+
+    m1_old_pos = m1_pos;
+    m2_old_pos = m2_pos;
+
+  }
+  */
+
+  while (Serial.available()) {
+		// get the new byte:
+		char inChar = (char)Serial.read();
+		// add it to the inputString:
+		mySt += inChar;
+		// if the incoming character is a newline, set a flag so the main loop can
+		// do something about it:
+		if (inChar == '\n')
+			stringComplete = true;
+	}
+
+  if (stringComplete) {
+		if (mySt.substring(0,2) == "l=")
+			setSpeed1 = mySt.substring(2,mySt.length()).toFloat();
+    else if (mySt.substring(0,2) == "r=")
+			setSpeed2 = mySt.substring(2,mySt.length()).toFloat();
+    else if (mySt.substring(0,2) == "p=")
+			Pk3 = mySt.substring(2,mySt.length()).toFloat(); //get string after vs_kp
+		else if (mySt.substring(0,2) == "i=")
+			Ik3 = mySt.substring(2,mySt.length()).toFloat(); //get string after vs_ki
+		else if (mySt.substring(0,2) == "d=")
+			Dk3 = mySt.substring(2,mySt.length()).toFloat(); //get string after vs_kd
+		PID_m1.SetTunings(Pk3, Ik3, Dk3);
+		// clear the string when COM receiving is completed
+		mySt = "";  //note: in code below, mySt will not become blank, mySt is blank until '\n' is received
+		stringComplete = false;
+	}
+
   // start timed event
   if (millis() - sensorLastMillis > BNO055_SAMPLERATE_DELAY_MS) {
     sensorLastMillis = millis();
@@ -356,17 +439,17 @@ void balance() {
 
   joybtn = remPackage.ch7;
 
-  double easing_drive = 900; //modify this value for stick smoothing sensitivity
+  double easing_drive = 800; //modify this value for stick smoothing sensitivity
   easing_drive /= 1000;
 
-  int target_pos_drive = joyY/3;
+  int target_pos_drive = joyY/2;
   // Work out the required travel.
   int diff_drive = target_pos_drive - current_pos_drive;
 
   // Avoid any strange zero condition
-  if( diff_drive != 0.00 ) {
-    current_pos_drive += diff_drive * easing_drive;
-  }
+  // if( diff_drive != 0.00 ) {
+  //   current_pos_drive += diff_drive * easing_drive;
+  // }
 
   Setpoint2 = current_pos_drive;
   Input2 = orientationY;
@@ -385,29 +468,65 @@ void balance() {
   ///
 
   int targetSpeed = Output2*-1; //RPM
+  float velocity1 = 0;
+  m1_pos = 0;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    m1_pos = m1_encoder_pos;
+    m2_pos = m2_encoder_pos;
+    velocity1 = velocity_i;
+  }
 
-  m1_pos = m1_encoder_pos;
-  m2_pos = m2_encoder_pos;
+  long currT = micros();
   encodersNewTime = millis();
   // m1_speed = (m1_pos - m1_old_pos) * 1000 / (encodersNewTime - encodersOldTime); // encoder ticks per second
 
+  // m1_speed = ((m1_pos - m1_old_pos) * (1000/INTERVAL)) * 60 / ENCODEROUTPUT;
+  // m2_speed = ((m2_pos - m2_old_pos) * (1000/INTERVAL)) * 60 / ENCODEROUTPUT;
+
   // (encoder tick * 1s/INTERVAL) * 60 / encodercount = rpm
-  m1_speed = ((m1_pos - m1_old_pos) * (1000/INTERVAL)) * 60 / 1200; // rpm
-  m2_speed = ((m2_pos - m2_old_pos) * (1000/INTERVAL)) * 60 / 1200; // rpm
+  // m1_speed = ((m1_pos - m1_old_pos) * (1000/INTERVAL)) * 60 / ENCODEROUTPUT; // rpm
+  // m2_speed = ((m2_pos - m2_old_pos) * (1000/INTERVAL)) * 60 / ENCODEROUTPUT; // rpm
+
+  // targetSpeed = 1000; // position
+  // targetSpeed = 250*sin(prevT/1e6); // postiton sin
+  // targetSpeed = 100/3.0*currT/1.0e6; // speed
+  targetSpeed = 100; //rpm
+
+
+  //https://www.youtube.com/watch?v=HRaZLCBFVDE&t=79s
+  // (64/4) * 18.75 = 300
+
+  float ecps = (m1_pos - m1_old_pos) * (1000/INTERVAL); // encoder count/s
+
+  float rpm = ecps / 600.0 * 60.0;
+
+  lowpassFilter.input(rpm);
+
+  float rpm_filtered = lowpassFilter.output();
+
+  m1_speed = rpm_filtered;
+  // m1_speed = m1_pos;
+
   // MyPlot.SendData("target", targetSpeed);
+  // MyPlot.SendData("m1_pos", m1_pos);
   // MyPlot.SendData("m1_speed", m1_speed);
   // MyPlot.SendData("m2_speed", m2_speed*-1);
 
-  // Serial.print("target:");
-  // Serial.print(targetSpeed);
-  // Serial.print(" m1_speed:");
-  // Serial.print(m1_speed);
+  Serial.print("target:");
+  Serial.print(targetSpeed);
+  Serial.print(" rpm:");
+  Serial.print(rpm);
+  Serial.print(" rpmf:");
+  Serial.print(rpm_filtered);
   // Serial.print(" m2_speed:");
   // Serial.print(m2_speed*-1);
-  // Serial.println();
+  // Serial.print(" velocity1:");
+  // Serial.print(velocity1);
+  Serial.println();
   m1_old_pos = m1_pos;
   m2_old_pos = m2_pos;
   encodersOldTime = encodersNewTime;
+  prevT = micros();
 
   Setpoint3 = targetSpeed;
   Input3 = m1_speed;
@@ -417,12 +536,23 @@ void balance() {
   Input4 = m2_speed;
   PID_m2.Compute();
 
-  MyPlot.SendData("target", targetSpeed);
-  MyPlot.SendData("m1_speed", m1_speed);
-  MyPlot.SendData("Output3", Output3);
+  // MyPlot.SendData("target", targetSpeed);
+  // MyPlot.SendData("m1_speed", m1_speed);
+  // MyPlot.SendData("Output3", Output3);
   // MyPlot.SendData("m2_speed", Output4*-1);
 
-  setMotorSpeed(Output3, Output4);
+  // MyPlot.SendData("rawJoyX", rawJoyX);
+  // MyPlot.SendData("rawJoyY", rawJoyY);
+
+  float yaw = map(joyX, -127, 127, -200, 200);
+
+  // MyPlot.SendData("yaw", yaw);
+
+  float m1SpeedY = Output3 + yaw;
+  float m2SpeedY = Output4 + yaw;
+
+  // setMotorSpeed(m1SpeedY, m2SpeedY);
+  setMotorSpeed(Output3, 0);
 }
 
 int inputCenterDeadzone = 4;
@@ -449,6 +579,11 @@ int thresholdStick (int pos) {
 void detect_m1_a() {
 	m1_dir = digitalRead(M1_ENCODER_B) ? 1 : -1; //read direction of motor
 	m1_encoder_pos+=m1_dir; //increasing encoder at new pulse
+
+  long currT = micros();
+  float deltaT = ((float) (currT - prevT_i))/1.0e6;
+  velocity_i = m1_dir/deltaT;
+  prevT_i = currT;
 }
 
 void detect_m2_a() {
@@ -460,20 +595,21 @@ void motorControl() {
 
 }
 
-float motorDeadzone = 0;
+int motorDeadzone = 0;
+int motorMin = 61; // 60 no load
 
 void setMotorSpeed(float m1Speed, float m2Speed) {
 
   if (m1Speed > motorDeadzone && joybtn == 0) {
     m1Speed = constrain(m1Speed,0,255);
-    m1Speed = map(m1Speed, 0, 255, 60, 255);
+    m1Speed = map(m1Speed, 0, 255, motorMin, 255);
     m1.setSpeed(m1Speed);
     m1.backward();
   }
   else if (m1Speed < -motorDeadzone && joybtn == 0) {
     int wheel2a = abs(m1Speed);
     wheel2a = constrain(wheel2a,0,255);
-    wheel2a = map(wheel2a, 0, 255, 60, 255);
+    wheel2a = map(wheel2a, 0, 255, motorMin, 255);
     m1.setSpeed(wheel2a);
     m1.forward();
   }
@@ -484,14 +620,14 @@ void setMotorSpeed(float m1Speed, float m2Speed) {
 
   if (m2Speed > motorDeadzone && joybtn == 0) {
     m2Speed = constrain(m2Speed,0,255);
-    m2Speed = map(m2Speed, 0, 255, 60, 255);
+    m2Speed = map(m2Speed, 0, 255, motorMin, 255);
     m2.setSpeed(m2Speed);
     m2.backward();
   }
   else if (m2Speed < -motorDeadzone && joybtn == 0) {
     int wheel2b = abs(m2Speed);
     wheel2b = constrain(wheel2b,0,255);
-    wheel2b = map(wheel2b, 0, 255, 60, 255);
+    wheel2b = map(wheel2b, 0, 255, motorMin, 255);
     m2.setSpeed(wheel2b);
     m2.forward();
   }
