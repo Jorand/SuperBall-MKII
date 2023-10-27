@@ -1,6 +1,8 @@
 # :soccer::robot: SuperBall MKII
 A rolling sphere
 
+! Work in progress !
+
 ## Goal here
 Making the ball roll in every direction giving by the remote whatever the orientation of the robot inside and keeping his balance when doing so.
 
