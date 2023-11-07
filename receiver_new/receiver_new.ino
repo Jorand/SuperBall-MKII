@@ -317,7 +317,7 @@ void balancev3() {
 
   int target_pos_drive = map(abs(directionSpeed), 0, 255, 0, -230);
 
-  Setpoint2 = target_pos_drive;
+  Setpoint2 = y;
   Input2 = orientationY+1;
   PID_angle.Compute();
 
@@ -325,18 +325,6 @@ void balancev3() {
 
   float m1Speed = -Output2 + yaw;
   float m2Speed = -Output2 - yaw;
-
-  // Serial.print("Setpoint2:");
-  // Serial.print(Setpoint2);
-  // Serial.print(",");
-  // Serial.print("Input2:");
-  // Serial.print(Input2);
-  // Serial.print(",");  
-  // Serial.print("m1Speed:");
-  // Serial.print(m1Speed);
-  // Serial.print(",");  
-  // Serial.print("m2Speed:");
-  // Serial.println(m2Speed);
 
   setMotorSpeed(m1Speed, m2Speed);
 }
@@ -360,10 +348,6 @@ int thresholdStick (int pos) {
     }
 
     return pos;
-}
-
-void motorControl() {
-
 }
 
 int motorDeadzone = 5;
@@ -413,17 +397,8 @@ void setMotorSpeed(float m1Speed, float m2Speed) {
   // MyPlot.SendData("wheel2a", wheel2a);
   // MyPlot.SendData("m2Speed", m2Speed);
   // MyPlot.SendData("wheel2b", wheel2b);
-  Serial.print("m1Speed:");
-  Serial.print(m1Speed);
-  Serial.print(",");
-  Serial.print("wheel2a:");
-  Serial.print(wheel2a);
-  Serial.print(",");  
-  Serial.print("m2Speed:");
-  Serial.print(m2Speed);
-  Serial.print(",");  
-  Serial.print("wheel2b:");
-  Serial.println(wheel2b);
+  // Serial.print("m1Speed:" + (String)m1Speed);
+  // Serial.println(",m2Speed:" + (String)m2Speed);
 }
 
 unsigned long lastModeButtonPress;
