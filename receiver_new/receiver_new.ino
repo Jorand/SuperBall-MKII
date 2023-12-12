@@ -99,15 +99,15 @@ int rawJoyY = 127, joyY, rawJoyX = 127, joyX, joyXLeft, joyXRight;
 
 
 // PID yaw
-double Pk1 = 2;   // 0.3 | 2
+double Pk1 = 1.2;   // 0.3 | 2
 double Ik1 = 0;     // 2 | 0
-double Dk1 = 0; // 0.011 | 0
+double Dk1 = 0.08; // 0.011 | 0
 
 double Setpoint1, Input1, Output1;    // PID variables
 PID PID_dir(&Input1, &Output1, &Setpoint1, Pk1, Ik1 , Dk1, DIRECT);    // PID Setup
 
 // PID pitch
-double Pk2 = 0.4; //1.4
+double Pk2 = 0.3; //1.4
 double Ik2 = 0;
 double Dk2 = 0;
 // double Pk2 = 2.25;
@@ -305,6 +305,12 @@ void loop() {
   }
 }
 
+int current_pos_drive;  // variables for smoothing main drive
+int target_pos_drive;
+int pot_drive;   // target position/inout
+int diff_drive; // difference of position
+double easing_drive;
+
 void balancev3() {
 
   joyX = thresholdStick(rawJoyX);
@@ -313,18 +319,85 @@ void balancev3() {
   float y = map(rawJoyY, 0, 255, -255, 255);
 
   // int directionSpeed = max( abs(x), abs(y) );
-  int directionSpeed = abs(y);
+  int directionSpeed = max( abs( x ), abs( y ) );
+
+  // DIRECTION DEGREE
+  float directionDeg = 0;
+  directionDeg = atan2(x, y) * 57;
+
+  Serial.print(" directionDeg: ");
+  Serial.print(directionDeg);
+
+  // DIRECTION ANGLE
+  float directionAngle = directionDeg;
+  if (directionAngle < 0) {
+    directionAngle = directionAngle + 360;
+  }
+
+  Serial.print(" directionAngle: ");
+  Serial.print(directionAngle);
+
+  // ANGLE TO HEAD
+  float angleToHead = 0;
+
+  if (orientationX >= offsetCompass) {
+    angleToHead = orientationX - offsetCompass;
+  }
+  else {
+    angleToHead = 360 - (offsetCompass - orientationX);
+  }
+
+  Serial.print(" angleToHead: ");
+  Serial.print(angleToHead);
+
+  if (directionSpeed <= 5) {
+    directionAngle = angleToHead;
+  }
+
+  // DIFF SHORTEST ANGLE
+  float error = directionAngle - angleToHead;
+
+  Serial.print(" rawerror: ");
+  Serial.print(error);
+  if (error > 180) {
+    error = error - 360;
+  }
+  else if (error < -180) {
+    error = error + 360;
+  }
+
+  Serial.print(" error: ");
+  Serial.println(error);
+  
+  Setpoint1 = 0;
+  
+  Input1 = error;
+  
+  PID_dir.Compute();
 
   int target_pos_drive = map(abs(directionSpeed), 0, 255, 0, -230);
 
-  Setpoint2 = y;
+  easing_drive = 700;          //modify this value for stick smoothing sensitivity
+  easing_drive /= 1000;
+
+  // Work out the required travel.
+  diff_drive = target_pos_drive - current_pos_drive;
+
+  // Avoid any strange zero condition
+  if( diff_drive != 0.00 ) {
+    current_pos_drive += diff_drive * easing_drive;
+  }
+
+  Setpoint2 = current_pos_drive;
   Input2 = orientationY+1;
   PID_angle.Compute();
 
-  float yaw = map(rawJoyX, 0, 255, -100, 100);
+  // float yaw = map(rawJoyX, 0, 255, -100, 100);
+  float yaw = Output1;
+  // float yaw = map(Output1, -255, 255, -Output2, Output2);
 
-  float m1Speed = -Output2 + yaw;
-  float m2Speed = -Output2 - yaw;
+  float m1Speed = -Output2 - yaw;
+  float m2Speed = -Output2 + yaw;
 
   setMotorSpeed(m1Speed, m2Speed);
 }
